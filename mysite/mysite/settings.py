@@ -101,3 +101,23 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
 STATIC_URL = '/static/'
+
+# Email settings -- following instructions from
+# https://www.edureka.co/community/39152/how-do-you-configure-django-to-send-mail-through-postfix
+# https://stackoverflow.com/questions/26333009/how-do-you-configure-django-to-send-mail-through-postfix
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'localhost'
+# EMAIL_PORT = 25
+# EMAIL_HOST_USER = ''
+# EMAIL_HOST_PASSWORD = ''
+# EMAIL_USE_TLS = False
+# EMAIL_USE_SSL = False
+# DEFAULT_FROM_EMAIL = 'Nicolas Bancel <nicolas.bancel@gmail.com>'
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_HOST_USER = 'nicolas.bancel@gmail.com'
+EMAIL_HOST_PASSWORD = 'Janson0668040115'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
