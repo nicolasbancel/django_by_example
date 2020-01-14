@@ -1,7 +1,12 @@
 from django.conf.urls import url
 from . import views
+from django.contrib.sitemaps.views import sitemap
+from blog.sitemaps import PostSitemap
+from .feeds import LatestPostsFeed
 
-
+sitemaps = {
+       'posts': PostSitemap,
+}
 
 
 urlpatterns = [
@@ -14,4 +19,8 @@ urlpatterns = [
        views.post_detail,
        name='post_detail'),
    url(r'^(?P<post_id>\d+)/share/$', views.post_share,name='post_share'),
+   url(r'^sitemap\.xml$', sitemap, {'sitemaps': sitemaps},
+           name='django.contrib.sitemaps.views.sitemap'),
+   url(r'^feed/$', LatestPostsFeed(), name='post_feed'),
+   url(r'^search/$', views.post_search, name='post_search'),
 ]
