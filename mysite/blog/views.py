@@ -1,9 +1,13 @@
-from django.shortcuts import render, get_object_or_404
-from .models import Post
-from django.core.paginator import Paginator, EmptyPage,PageNotAnInteger
-from django.core.mail import send_mail
-from django.views.generic import ListView
-from .forms import EmailPostForm
+from django.shortcuts       import render, get_object_or_404
+from .models                import Post, Comment
+from django.core.paginator  import Paginator, EmptyPage,PageNotAnInteger
+from django.core.mail       import send_mail
+from django.views.generic   import ListView
+
+from django.db.models       import Count
+from .forms                 import EmailPostForm, CommentForm, SearchForm
+from taggit.models          import Tag
+from haystack.query         import SearchQuerySet
 
 
 class PostListView(ListView):
@@ -24,8 +28,14 @@ class PostListView(ListView):
 # New version of post_list
 ##############################################
 
-def post_list(request):
+def post_list(request, tag_slug=None):
        object_list = Post.published.all()
+       tag = None
+
+       if tag_slug:
+            tag = get_object_or_404(Tag, slug=tag_slug)
+            object_list = object_list.filter(tags__in=[tag])
+
        paginator = Paginator(object_list, 3) # 3 posts in each page
        page = request.GET.get('page')
        try:
@@ -36,7 +46,9 @@ def post_list(request):
        except EmptyPage:
            # If page is out of range deliver last page of results
            posts = paginator.page(paginator.num_pages)
-       return render(request,'blog/post/list.html',{'page': page, 'posts': posts})
+       return render(request,'blog/post/list.html',{'page': page,
+                                                    'posts': posts,
+                                                    'tag': tag})
 
 
 def post_detail(request, year, month, day, post):
@@ -45,7 +57,31 @@ def post_detail(request, year, month, day, post):
                                   publish__year=year,
                                   publish__month=month,
                                   publish__day=day)
-   return render(request,'blog/post/detail.html',{'post': post})
+    # List of active comments for this post
+   comments = post.comments.filter(active=True)
+   # new_comment = None
+   if request.method == 'POST':
+       # A comment was posted
+       comment_form = CommentForm(data=request.POST)
+       if comment_form.is_valid():
+           # Create Comment object but don't save to database
+           new_comment = comment_form.save(commit=False)
+           # Assign the current post to the comment
+           new_comment.post = post
+           # Save the comment to the database
+           new_comment.save()
+   else:
+       comment_form = CommentForm()
+
+   # List of similar posts
+   post_tags_ids = post.tags.values_list('id', flat=True)
+   similar_posts = Post.published.filter(tags__in=post_tags_ids).exclude(id=post.id)
+   similar_posts = similar_posts.annotate(same_tags=Count('tags')).order_by('-same_tags','-publish')[:4]
+
+   return render(request,'blog/post/detail.html',{'post': post,
+                                                 'comments': comments,
+                                                 'comment_form': comment_form,
+                                                 'similar_posts': similar_posts})
 
 ##############################################
 ## From Chapter 2
@@ -70,4 +106,37 @@ def post_share(request, post_id):
        else:
            form = EmailPostForm() ## Displays an empty form
        return render(request, 'blog/post/share.html', {'post': post,
-                                                       'form': form})
+                                                       'form': form,
+                                                       'sent': sent})
+
+
+# Indenting is important here
+# If return is at same level as if form.is_valid(): then no request at all when no query in the GET
+    # Error message: The view blog.views.post_search didn't return an HttpResponse object. It returned None instead.
+# If return is at same level as if 'query' in request.GET : then when no query, there's no cd nor results either
+    # Error message: local variable 'cd' referenced before assignment
+# Solution:
+    # 1. Created another possible output to exit the IF: just render the form return render(request, 'blog/post/search.html', {'form': form,})
+        # Solution from Stack overflow: https://stackoverflow.com/questions/37482461/unboundlocalerror-at-blog-search-local-variable-cd-referenced-before-assignm
+    # 2. Initiated cd and results variables (https://github.com/PacktPublishing/Django-2-by-Example/blob/master/Chapter03/mysite/blog/views.py)
+
+
+def post_search(request):
+       form = SearchForm()
+       cd = None
+       results = []
+       total_results = 0
+       if 'query' in request.GET:
+           form = SearchForm(request.GET)
+           if form.is_valid():
+               cd = form.cleaned_data
+               results = SearchQuerySet().models(Post).filter(content=cd['query']).load_all()
+               # count total results
+               total_results = results.count()
+       return render(request,
+             'blog/post/search.html',
+             {'form': form,
+              'cd': cd,
+              'results': results,
+              'total_results': total_results})
+       #return render(request, 'blog/post/search.html', {'form': form,})
